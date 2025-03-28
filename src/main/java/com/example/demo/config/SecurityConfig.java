@@ -4,16 +4,18 @@ package com.example.demo.config;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.firewall.DefaultHttpFirewall;
 import org.springframework.security.web.firewall.HttpFirewall;
-import org.springframework.security.web.firewall.StrictHttpFirewall;
 
 import com.example.demo.auth.JwtAuthFilter;
 
@@ -21,52 +23,55 @@ import lombok.RequiredArgsConstructor;
 
 
 
-@SuppressWarnings("deprecation")
-@Configuration		//빈등록
-@EnableWebSecurity	//시큐리티 필터 추가
+@Configuration
+@EnableWebSecurity
 @RequiredArgsConstructor
-@EnableGlobalMethodSecurity(prePostEnabled = true)	//특정 주소로 접근을 하면 권한 및 인증을 미리 체크하겠다는 뜻.
+@EnableGlobalMethodSecurity(prePostEnabled = true)
 public class SecurityConfig {
-     
-	
-    private final JwtAuthFilter jwtAuthenticationFilter;
+
+    private final JwtAuthFilter jwtAuthFilter;
     private final UserDetailsService userDetailsService;
-    
-    
-//    public SecurityConfig(JwtAuthFilter jwtAuthenticationFilter, UserDetailsService userDetailsService) {
-//        this.jwtAuthenticationFilter = jwtAuthenticationFilter;
-//        this.userDetailsService = userDetailsService;
-//    }
 
     @Bean
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration configuration) throws Exception {
-        return configuration.getAuthenticationManager();
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
+        return authenticationConfiguration.getAuthenticationManager();
     }
-    
+
     @Bean
-    protected SecurityFilterChain filterChain(HttpSecurity http) throws Exception {//"/api/v1/tutor/**", "/api/v1/student/**",
+    protected SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-            .csrf(csrf -> csrf.disable()) 
+            .csrf(csrf -> csrf.disable()) // CSRF 비활성화
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers( "/api/v1/login","/**").permitAll()
-                .anyRequest().authenticated()
+                .requestMatchers("/api/v1/login", "/**").permitAll()  // 로그인은 누구나 접근 가능
+                .anyRequest().authenticated()  // 다른 요청은 인증 필요
             )
-            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)  // 필터 추가
-        ;
+            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);  // JwtAuthFilter 추가
 
         return http.build();
-    } 
-	
-//    @Bean
-//    public HttpFirewall allowUrlEncodedSlashHttpFirewall() {
-//        StrictHttpFirewall firewall = new StrictHttpFirewall();
-//        firewall.setAllowUrlEncodedSlash(true); // 이중 슬래시 허용
-//        return firewall;
-//    }
+    }
+
     @Bean
     public HttpFirewall allowUrlEncodedSlashHttpFirewall() {
         DefaultHttpFirewall firewall = new DefaultHttpFirewall();
-        firewall.setAllowUrlEncodedSlash(true); // URL 인코딩된 슬래시를 허용
+        firewall.setAllowUrlEncodedSlash(true); // URL 인코딩된 슬래시 허용
         return firewall;
     }
+
+    // 인증 매니저 설정 부분 수정
+    @Bean
+    public AuthenticationManager authenticationManager(HttpSecurity http) throws Exception {
+        return http.getSharedObject(AuthenticationManagerBuilder.class)
+                   .userDetailsService(userDetailsService) // UserDetailsService 설정
+                   .passwordEncoder(passwordEncoder()) // 패스워드 인코더 설정 (optional)
+                   .and()
+                   .build();
+    }
+
+    // 패스워드 인코더 추가 (필요 시)
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
 }
+
+
